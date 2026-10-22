@@ -26,8 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Bangun router dengan state
     let app = create_app(state);
 
-    // Konfigurasi IP dan port listener
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    // Konfigurasi IP dan port listener dari env atau default ke 0.0.0.0:3000
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3000);
+    let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
     tracing::info!("Server API berjalan di http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

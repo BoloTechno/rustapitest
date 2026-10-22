@@ -211,6 +211,76 @@ async fn test_get_not_found() {
 }
 
 #[tokio::test]
+async fn test_update_and_delete_not_found() {
+    let app = setup_test_app().await;
+    let random_id = Uuid::new_v4();
+
+    // PUT non-existent ID
+    let res_put = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/todos/{random_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({"title": "Update non-existent"}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_put.status(), StatusCode::NOT_FOUND);
+
+    // DELETE non-existent ID
+    let res_del = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/todos/{random_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_del.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_update_empty_title() {
+    let app = setup_test_app().await;
+
+    // Create a todo first
+    let res_create = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/todos")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({"title": "Initial"}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body_bytes = res_create.into_body().collect().await.unwrap().to_bytes();
+    let created: ApiResponse<Todo> = serde_json::from_slice(&body_bytes).unwrap();
+    let todo_id = created.data.unwrap().id;
+
+    // Update with blank title
+    let res_update = app
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri(format!("/api/todos/{todo_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({"title": "   "}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res_update.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn test_database_persistence_across_connections() {
     // Pengujian khusus: Buktikan bahwa data tetap tersimpan saat connection pool ditutup dan dibuka kembali
     let temp_dir = std::env::temp_dir();

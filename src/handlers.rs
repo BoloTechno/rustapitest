@@ -32,10 +32,11 @@ pub async fn health_check(
 pub async fn list_todos(
     State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<Todo>>>, AppError> {
-    let todos =
-        sqlx::query_as::<_, Todo>("SELECT id, title, completed FROM todos ORDER BY rowid ASC")
-            .fetch_all(&state.pool)
-            .await?;
+    let todos = sqlx::query_as::<_, Todo>(
+        "SELECT id, title, completed FROM todos ORDER BY rowid ASC LIMIT 100",
+    )
+    .fetch_all(&state.pool)
+    .await?;
 
     Ok(Json(ApiResponse::success(
         "Daftar todo berhasil diambil",
@@ -104,34 +105,34 @@ pub async fn update_todo(
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateTodoPayload>,
 ) -> Result<Json<ApiResponse<Todo>>, AppError> {
-    let mut todo = sqlx::query_as::<_, Todo>("SELECT id, title, completed FROM todos WHERE id = ?")
-        .bind(id)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| AppError::NotFound(format!("Todo dengan ID '{id}' tidak ditemukan")))?;
-
-    if let Some(new_title) = payload.title {
-        let trimmed = new_title.trim().to_string();
-        if trimmed.is_empty() {
-            return Err(AppError::BadRequest(
-                "Judul baru tidak boleh kosong".to_string(),
-            ));
+    let trimmed_title = match payload.title {
+        Some(t) => {
+            let s = t.trim().to_string();
+            if s.is_empty() {
+                return Err(AppError::BadRequest(
+                    "Judul baru tidak boleh kosong".to_string(),
+                ));
+            }
+            Some(s)
         }
-        todo.title = trimmed;
+        None => None,
+    };
+
+    let maybe_todo = sqlx::query_as::<_, Todo>(
+        "UPDATE todos SET title = COALESCE(?, title), completed = COALESCE(?, completed) WHERE id = ? RETURNING id, title, completed",
+    )
+    .bind(trimmed_title)
+    .bind(payload.completed)
+    .bind(id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    match maybe_todo {
+        Some(todo) => Ok(Json(ApiResponse::success("Todo berhasil diperbarui", todo))),
+        None => Err(AppError::NotFound(format!(
+            "Todo dengan ID '{id}' tidak ditemukan"
+        ))),
     }
-
-    if let Some(completed) = payload.completed {
-        todo.completed = completed;
-    }
-
-    sqlx::query("UPDATE todos SET title = ?, completed = ? WHERE id = ?")
-        .bind(&todo.title)
-        .bind(todo.completed)
-        .bind(todo.id)
-        .execute(&state.pool)
-        .await?;
-
-    Ok(Json(ApiResponse::success("Todo berhasil diperbarui", todo)))
 }
 
 /// DELETE /api/todos/:id

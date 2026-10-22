@@ -14,9 +14,6 @@ pub enum AppError {
     BadRequest(String),
     /// Terjadi kesalahan query atau koneksi database (HTTP 500)
     Database(String),
-    /// Terjadi kesalahan internal lainnya pada server (HTTP 500)
-    #[allow(dead_code)]
-    Internal(String),
 }
 
 /// Implementasi `IntoResponse` memungkinkan `AppError` langsung di-return
@@ -32,10 +29,6 @@ impl IntoResponse for AppError {
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Terjadi kesalahan pada database".to_string(),
                 )
-            }
-            AppError::Internal(msg) => {
-                tracing::error!("Internal error: {msg}");
-                (StatusCode::INTERNAL_SERVER_ERROR, msg)
             }
         };
 
